@@ -4,6 +4,7 @@ from datetime import  timedelta
 from fastapi import  FastAPI
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import sessionmaker
 
 
 DATABASE_URL = "postgresql://postgres:1234@localhost/bodroe_ytro"
@@ -11,6 +12,8 @@ DATABASE_URL = "postgresql://postgres:1234@localhost/bodroe_ytro"
 database =databases.Database(DATABASE_URL)
 
 metadata = sqlalchemy.MetaData()
+
+
 
 training_category = sqlalchemy.Table(
     "training_category",
@@ -70,6 +73,10 @@ engine = sqlalchemy.create_engine(
     DATABASE_URL
 )
 metadata.create_all(engine)
+
+Session = sessionmaker(engine)
+
+session = Session()
 
 class User(BaseModel):
     UserId: str
@@ -145,7 +152,7 @@ async def getExircicesfromGroup(group_id: int):
     # res = training.select().where(training.c.Id == query[0][1])
     return res
 
-@app.get("/ProgressByUser/{user_id}")
+@app.get("/ProgressByUser/")
 async def getProgressByUser(user_id: str):
     query = progress.select().where(progress.c.user_toket== user_id)
     return await database.fetch_all(query)
@@ -159,18 +166,20 @@ async def getAchiviesForUser(user_id:str):
     date = datetime.date.today()
     while(count!=0):
         query = engine.execute(progress.select().where(progress.c.date==date and progress.c.user_toket == user_id))
-        date -=timedelta(days=days+1)
-        if(len(query.fetchall())>0):
+        print("date", date)
+        cnt =len(query.fetchall())
+        if(cnt>0):
             days+=1
-        count=len(query.fetchall())
+        count=cnt
+        date -=timedelta(days=1)
     print(query)
 
     count_train = len(engine.execute(progress.select().where(progress.c.user_toket == user_id)).fetchall())
-    
-    #count_days_train = engine.execute(progress.select([progress.c.date])).fetchall()
+
+    count_days_train =session.query(progress.c.date, sqlalchemy.func.count(progress.c.date)).where(progress.c.user_toket == user_id).group_by(progress.c.date).all()
 
     res =dict()
     res['dict']=days
     res['count_train']=count_train
-    res['count_days_train']=0
+    res['count_days_train']=len(count_days_train)
     return res
